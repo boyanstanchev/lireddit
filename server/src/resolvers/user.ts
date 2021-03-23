@@ -6,13 +6,16 @@ import {
   InputType,
   Mutation,
   ObjectType,
+  Query,
   Resolver,
 } from 'type-graphql';
 import { User } from '../entities/User';
 import { MyContext } from '../types';
+import { EntityManager } from '@mikro-orm/postgresql'
+import { v4 } from 'uuid';
 
 @InputType()
-class RegisterInput {
+class UsernamePasswordInput {
   @Field()
   username: string;
 
@@ -42,7 +45,7 @@ class UserResponse {
 export class UserResolver {
   @Mutation(() => UserResponse)
   async register(
-    @Arg('input') { username, password }: RegisterInput,
+    @Arg('input') { username, password }: UsernamePasswordInput,
     @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     if (username.length <= 2) {
@@ -65,15 +68,23 @@ export class UserResolver {
 
     const hashedPassword = await argon2.hash(password);
 
-    const user = em.create(User, {
-      username,
-      password: hashedPassword,
-    });
+    let user;
 
     try {
-      await em.persistAndFlush(user);
+      const result = await (em as EntityManager)
+        .createQueryBuilder(User)
+        .getKnexQuery()
+        .insert({
+          uuid: v4(),
+          username: username,
+          password: hashedPassword,
+          created_at: new Date(),
+          updated_at: new Date()
+        }).returning('*');
+
+      user = result[0];
     } catch (error) {
-      if (error.code === '23505') {
+      if (error.detail.includes('already exists')) {
         return {
           errors: [{
             field: 'username',
@@ -92,7 +103,7 @@ export class UserResolver {
 
   @Mutation(() => UserResponse)
   async login(
-    @Arg('input') { username, password }: RegisterInput,
+    @Arg('input') { username, password }: UsernamePasswordInput,
     @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     const user = await em.findOne(User, { username })
@@ -122,5 +133,14 @@ export class UserResolver {
     return {
       user
     }
+  }
+
+  @Query(() => User, { nullable: true })
+  me(@Ctx() { req, em }: MyContext) {
+    if (!req.session.userId) {
+      return null;
+    }
+
+    return em.findOne(User, { uuid: req.session.userId });
   }
 }
