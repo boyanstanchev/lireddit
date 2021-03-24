@@ -13,6 +13,7 @@ import { User } from '../entities/User';
 import { MyContext } from '../types';
 import { EntityManager } from '@mikro-orm/postgresql'
 import { v4 } from 'uuid';
+import { AUTH_COOKIE_NAME } from '../constants';
 
 @InputType()
 class UsernamePasswordInput {
@@ -142,5 +143,22 @@ export class UserResolver {
     }
 
     return em.findOne(User, { uuid: req.session.userId });
+  }
+
+  @Mutation(() => Boolean)
+  logout(
+    @Ctx() { req, res }: MyContext
+  ): Promise<boolean> {
+    return new Promise(resolve => req.session.destroy(err => {
+      res.clearCookie(AUTH_COOKIE_NAME);
+
+      if (err) {
+        console.error(err);
+        resolve(false);
+        return;
+      }
+
+      resolve(true);
+    }));
   }
 }

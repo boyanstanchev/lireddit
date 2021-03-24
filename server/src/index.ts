@@ -2,7 +2,7 @@ import { MikroORM } from "@mikro-orm/core";
 import { ApolloServer } from "apollo-server-express";
 import express from "express";
 import { buildSchema } from "type-graphql";
-import { __prod__ } from "./constants";
+import { AUTH_COOKIE_NAME, __prod__ } from "./constants";
 import config from './mikro-orm.config';
 import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/post";
@@ -35,7 +35,7 @@ const main = async () => {
 
   app.use(
     session({
-      name: 'qid',
+      name: AUTH_COOKIE_NAME,
       store: new RedisStore({
         client: redisClient,
         disableTouch: true
