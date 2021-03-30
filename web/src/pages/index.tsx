@@ -9,6 +9,7 @@ const Index = () => {
   return (
     <>
       <NavBar />
+      <br />
       {!data
         ? null
         : data.posts.map((post) => <div key={post.uuid}>{post.title}</div>)}

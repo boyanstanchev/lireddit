@@ -6,10 +6,10 @@ import { useRegisterMutation } from '../generated/graphql';
 import InputField from '../UI/InputField';
 import { toErrorMap } from '../utils/toErrorMap';
 import { useRouter } from 'next/router';
+import { withUrqlClient } from 'next-urql';
+import { createUrqlClient } from '../utils/createUrqlClient';
 
-type РegisterProps = {};
-
-const Рegister = ({}: РegisterProps) => {
+const Register = () => {
   const [{}, register] = useRegisterMutation();
   const router = useRouter();
 
@@ -19,9 +19,10 @@ const Рegister = ({}: РegisterProps) => {
         initialValues={{
           username: '',
           password: '',
+          email: '',
         }}
         onSubmit={async (values, { setErrors }) => {
-          const response = await register(values);
+          const response = await register({ input: values });
 
           if (response.data?.register.errors) {
             setErrors(toErrorMap(response.data.register.errors));
@@ -37,6 +38,15 @@ const Рegister = ({}: РegisterProps) => {
               placeholder="username"
               label="Username"
             />
+
+            <Box mt={4}>
+              <InputField
+                name="email"
+                placeholder="email"
+                label="Email"
+                type="email"
+              />
+            </Box>
 
             <Box mt={4}>
               <InputField
@@ -62,4 +72,4 @@ const Рegister = ({}: РegisterProps) => {
   );
 };
 
-export default Рegister;
+export default withUrqlClient(createUrqlClient)(Register);

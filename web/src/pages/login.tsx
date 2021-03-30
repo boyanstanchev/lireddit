@@ -6,6 +6,8 @@ import { useLoginMutation } from '../generated/graphql';
 import InputField from '../UI/InputField';
 import { toErrorMap } from '../utils/toErrorMap';
 import { useRouter } from 'next/router';
+import { createUrqlClient } from '../utils/createUrqlClient';
+import { withUrqlClient } from 'next-urql';
 
 type LoginProps = {};
 
@@ -17,14 +19,14 @@ const Login = ({}: LoginProps) => {
     <Wrapper variant="small">
       <Formik
         initialValues={{
-          username: '',
+          usernameOrEmail: '',
           password: '',
         }}
         onSubmit={async (values, { setErrors }) => {
-          const response = await login({ input: values });
+          const response = await login(values);
 
           if (response.data?.login.errors) {
-            setErrors(toErrorMap(response.data?.login.errors));
+            setErrors(toErrorMap(response.data.login.errors));
           } else if (response.data?.login.user) {
             router.push('/');
           }
@@ -33,15 +35,15 @@ const Login = ({}: LoginProps) => {
         {({ isSubmitting }) => (
           <Form>
             <InputField
-              name="username"
-              placeholder="username"
-              label="Username"
+              name="usernameOrEmail"
+              placeholder="Username Or Email"
+              label="Username Or Email"
             />
 
             <Box mt={4}>
               <InputField
                 name="password"
-                placeholder="password"
+                placeholder="Password"
                 label="Password"
                 type="password"
               />
@@ -62,4 +64,4 @@ const Login = ({}: LoginProps) => {
   );
 };
 
-export default Login;
+export default withUrqlClient(createUrqlClient)(Login);
