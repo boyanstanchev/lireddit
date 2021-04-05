@@ -10,7 +10,7 @@ import {
 } from 'type-graphql';
 import { User } from '../entities/User';
 import { MyContext } from '../types';
-import { EntityManager } from '@mikro-orm/postgresql'
+import { EntityManager } from '@mikro-orm/postgresql';
 import { v4 } from 'uuid';
 import { AUTH_COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from '../constants';
 import { UserInput } from './UserInput';
@@ -29,14 +29,66 @@ class FieldError {
 @ObjectType()
 class UserResponse {
   @Field(() => [FieldError], { nullable: true })
-  errors?: FieldError[]
+  errors?: FieldError[];
 
   @Field(() => User, { nullable: true })
-  user?: User
+  user?: User;
 }
 
 @Resolver()
 export class UserResolver {
+  @Mutation(() => UserResponse)
+  async changePassword(
+    @Arg('newPassword') newPassword: string,
+    @Arg('token') token: string,
+    @Ctx() { redis, em, req }: MyContext
+  ): Promise<UserResponse> {
+    if (newPassword.length <= 2) {
+      return {
+        errors: [
+          {
+            field: 'token',
+            message: 'Token Expired',
+          },
+        ],
+      };
+    }
+
+    const userId = await redis.get(FORGOT_PASSWORD_PREFIX + token);
+
+    if (userId) {
+      return {
+        errors: [
+          {
+            field: 'newPassword',
+            message: 'Length must be greater than 2',
+          },
+        ],
+      };
+    }
+
+    const user = await em.findOne(User, { uuid: userId });
+
+    if (!user) {
+      return {
+        errors: [
+          {
+            field: 'token',
+            message: 'User No Longer Exists',
+          },
+        ],
+      };
+    }
+
+    user.password = await argon2.hash(newPassword);
+
+    await em.persistAndFlush(user);
+
+    req.session.userId = user.uuid;
+
+    return { user };
+  }
+
   @Mutation(() => Boolean)
   async forgotPassword(
     @Arg('email') email: string,
@@ -57,9 +109,13 @@ export class UserResolver {
       1000 * 60 * 60 * 24 * 3
     );
 
-    await sendEmail(email, 'Forgotten Password', `
+    await sendEmail(
+      email,
+      'Forgotten Password',
+      `
       <a href="http://localhost:3000/change-password/${token}">Reset Password</a>
-    `);
+    `
+    );
 
     return true;
   }
@@ -89,26 +145,29 @@ export class UserResolver {
           username,
           password: hashedPassword,
           created_at: new Date(),
-          updated_at: new Date()
-        }).returning('*');
+          updated_at: new Date(),
+        })
+        .returning('*');
 
       user = result[0];
     } catch (error) {
       if (error.detail.includes('already exists')) {
         return {
-          errors: [{
-            field: 'username',
-            message: 'Username already taken'
-          }]
-        }
+          errors: [
+            {
+              field: 'username',
+              message: 'Username already taken',
+            },
+          ],
+        };
       }
     }
 
     req.session!.userId = user.uuid;
 
     return {
-      user
-    }
+      user,
+    };
   }
 
   @Mutation(() => UserResponse)
@@ -117,36 +176,42 @@ export class UserResolver {
     @Arg('password') password: string,
     @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
-    const user = await em.findOne(User, usernameOrEmail.includes('@')
-      ? { email: usernameOrEmail }
-      : { username: usernameOrEmail }
+    const user = await em.findOne(
+      User,
+      usernameOrEmail.includes('@')
+        ? { email: usernameOrEmail }
+        : { username: usernameOrEmail }
     );
 
     if (!user) {
       return {
-        errors: [{
-          field: 'usernameOrEmail',
-          message: 'Such user does not exist'
-        }]
-      }
+        errors: [
+          {
+            field: 'usernameOrEmail',
+            message: 'Such user does not exist',
+          },
+        ],
+      };
     }
 
     const passwordValid = await argon2.verify(user.password, password);
 
     if (!passwordValid) {
       return {
-        errors: [{
-          field: 'password',
-          message: 'Passwords do not match'
-        }]
-      }
+        errors: [
+          {
+            field: 'password',
+            message: 'Passwords do not match',
+          },
+        ],
+      };
     }
 
     req.session!.userId = user.uuid;
 
     return {
-      user
-    }
+      user,
+    };
   }
 
   @Query(() => User, { nullable: true })
@@ -159,19 +224,19 @@ export class UserResolver {
   }
 
   @Mutation(() => Boolean)
-  logout(
-    @Ctx() { req, res }: MyContext
-  ): Promise<boolean> {
-    return new Promise(resolve => req.session.destroy(err => {
-      res.clearCookie(AUTH_COOKIE_NAME);
+  logout(@Ctx() { req, res }: MyContext): Promise<boolean> {
+    return new Promise((resolve) =>
+      req.session.destroy((err) => {
+        res.clearCookie(AUTH_COOKIE_NAME);
 
-      if (err) {
-        console.error(err);
-        resolve(false);
-        return;
-      }
+        if (err) {
+          console.error(err);
+          resolve(false);
+          return;
+        }
 
-      resolve(true);
-    }));
+        resolve(true);
+      })
+    );
   }
 }
