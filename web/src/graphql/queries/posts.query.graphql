@@ -1,6 +1,6 @@
 query Posts {
   posts {
-    uuid
+    id
     createdAt
     updatedAt
     title

@@ -13,7 +13,7 @@ const Index = () => {
       <br />
       {!data
         ? null
-        : data.posts.map((post) => <div key={post.uuid}>{post.title}</div>)}
+        : data.posts.map((post) => <div key={post.id}>{post.title}</div>)}
     </>
   );
 };

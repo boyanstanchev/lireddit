@@ -10,12 +10,12 @@ import {
 } from 'type-graphql';
 import { User } from '../entities/User';
 import { MyContext } from '../types';
-import { EntityManager } from '@mikro-orm/postgresql';
 import { v4 } from 'uuid';
 import { AUTH_COOKIE_NAME, FORGOT_PASSWORD_PREFIX } from '../constants';
 import { UserInput } from './UserInput';
 import { validateRegister } from '../utils/validateRegister';
 import { sendEmail } from '../utils/sendEmail';
+import { getConnection } from 'typeorm';
 
 @ObjectType()
 class FieldError {
@@ -41,7 +41,7 @@ export class UserResolver {
   async changePassword(
     @Arg('newPassword') newPassword: string,
     @Arg('token') token: string,
-    @Ctx() { redis, em, req }: MyContext
+    @Ctx() { redis, req }: MyContext
   ): Promise<UserResponse> {
     if (newPassword.length <= 2) {
       return {
@@ -69,7 +69,7 @@ export class UserResolver {
       };
     }
 
-    const user = await em.findOne(User, { uuid: userId });
+    const user = await User.findOne(userId);
 
     if (!user) {
       return {
@@ -82,13 +82,14 @@ export class UserResolver {
       };
     }
 
-    user.password = await argon2.hash(newPassword);
-
-    await em.persistAndFlush(user);
+    await User.update(
+      { id: userId },
+      { password: await argon2.hash(newPassword) }
+    );
 
     await redis.del(key);
 
-    req.session.userId = user.uuid;
+    req.session.userId = user.id;
 
     return { user };
   }
@@ -96,19 +97,20 @@ export class UserResolver {
   @Mutation(() => Boolean)
   async forgotPassword(
     @Arg('email') email: string,
-    @Ctx() { em, redis }: MyContext
+    @Ctx() { redis }: MyContext
   ) {
-    const user = await em.findOne(User, { email });
+    // .findOne(id) only works for primary columns
+    const user = await User.findOne({ where: { email } });
 
     if (!user) {
-      return true;
+      return false;
     }
 
     const token = v4();
 
     await redis.set(
       FORGOT_PASSWORD_PREFIX + token,
-      user.uuid,
+      user.id,
       'ex',
       1000 * 60 * 60 * 24 * 3
     );
@@ -127,7 +129,7 @@ export class UserResolver {
   @Mutation(() => UserResponse)
   async register(
     @Arg('input') { email, username, password }: UserInput,
-    @Ctx() { em, req }: MyContext
+    @Ctx() { req }: MyContext
   ): Promise<UserResponse> {
     const errors = validateRegister({ email, username, password });
 
@@ -140,20 +142,19 @@ export class UserResolver {
     let user;
 
     try {
-      const result = await (em as EntityManager)
-        .createQueryBuilder(User)
-        .getKnexQuery()
-        .insert({
-          uuid: v4(),
+      const result = await getConnection()
+        .createQueryBuilder()
+        .insert()
+        .into(User)
+        .values({
           email,
           username,
           password: hashedPassword,
-          created_at: new Date(),
-          updated_at: new Date(),
         })
-        .returning('*');
+        .returning('*')
+        .execute();
 
-      user = result[0];
+      user = new User() as any;
     } catch (error) {
       if (error.detail.includes('already exists')) {
         return {
@@ -167,7 +168,7 @@ export class UserResolver {
       }
     }
 
-    req.session!.userId = user.uuid;
+    req.session!.userId = user.id;
 
     return {
       user,
@@ -178,14 +179,13 @@ export class UserResolver {
   async login(
     @Arg('usernameOrEmail') usernameOrEmail: string,
     @Arg('password') password: string,
-    @Ctx() { em, req }: MyContext
+    @Ctx() { req }: MyContext
   ): Promise<UserResponse> {
-    const user = await em.findOne(
-      User,
-      usernameOrEmail.includes('@')
+    const user = await User.findOne({
+      where: usernameOrEmail.includes('@')
         ? { email: usernameOrEmail }
-        : { username: usernameOrEmail }
-    );
+        : { username: usernameOrEmail },
+    });
 
     if (!user) {
       return {
@@ -211,7 +211,7 @@ export class UserResolver {
       };
     }
 
-    req.session!.userId = user.uuid;
+    req.session!.userId = user.id;
 
     return {
       user,
@@ -219,12 +219,12 @@ export class UserResolver {
   }
 
   @Query(() => User, { nullable: true })
-  me(@Ctx() { req, em }: MyContext) {
+  me(@Ctx() { req }: MyContext) {
     if (!req.session.userId) {
       return null;
     }
 
-    return em.findOne(User, { uuid: req.session.userId });
+    return User.findOne(req.session.userId);
   }
 
   @Mutation(() => Boolean)

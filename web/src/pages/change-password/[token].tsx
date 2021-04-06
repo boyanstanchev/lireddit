@@ -1,4 +1,4 @@
-import { Box, Button } from '@chakra-ui/react';
+import { Box, Button, Flex, Link } from '@chakra-ui/react';
 import Wrapper from '@components/Wrapper';
 import InputField from '@UI/InputField';
 import { createUrqlClient } from '@utils/createUrqlClient';
@@ -9,6 +9,7 @@ import { withUrqlClient } from 'next-urql';
 import { useRouter } from 'next/router';
 import React, { useState } from 'react';
 import { useChangePasswordMutation } from '../../generated/graphql';
+import NextLink from 'next/link';
 
 const ChangePassword: NextPage<{ token: string }> = ({ token }) => {
   const router = useRouter();
@@ -50,9 +51,14 @@ const ChangePassword: NextPage<{ token: string }> = ({ token }) => {
             />
 
             {tokenError ? (
-              <Box mr={2} style={{ color: 'red' }}>
-                {tokenError}
-              </Box>
+              <Flex>
+                <Box mr={2} style={{ color: 'red' }}>
+                  {tokenError}
+                </Box>
+                <NextLink href="/forgot-password">
+                  <Link>Try Again</Link>
+                </NextLink>
+              </Flex>
             ) : null}
 
             <Button
