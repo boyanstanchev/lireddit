@@ -47,21 +47,23 @@ export class UserResolver {
       return {
         errors: [
           {
-            field: 'token',
-            message: 'Token Expired',
+            field: 'newPassword',
+            message: 'Length must be greater than 2',
           },
         ],
       };
     }
 
-    const userId = await redis.get(FORGOT_PASSWORD_PREFIX + token);
+    const key = FORGOT_PASSWORD_PREFIX + token;
 
-    if (userId) {
+    const userId = await redis.get(key);
+
+    if (!userId) {
       return {
         errors: [
           {
-            field: 'newPassword',
-            message: 'Length must be greater than 2',
+            field: 'token',
+            message: 'Token Expired',
           },
         ],
       };
@@ -83,6 +85,8 @@ export class UserResolver {
     user.password = await argon2.hash(newPassword);
 
     await em.persistAndFlush(user);
+
+    await redis.del(key);
 
     req.session.userId = user.uuid;
 

@@ -1,16 +1,19 @@
-import { Button } from '@chakra-ui/react';
+import { Box, Button } from '@chakra-ui/react';
+import Wrapper from '@components/Wrapper';
+import InputField from '@UI/InputField';
+import { createUrqlClient } from '@utils/createUrqlClient';
+import { toErrorMap } from '@utils/toErrorMap';
 import { Form, Formik } from 'formik';
 import { NextPage } from 'next';
+import { withUrqlClient } from 'next-urql';
 import { useRouter } from 'next/router';
-import React from 'react';
-import Wrapper from '../../components/Wrapper';
+import React, { useState } from 'react';
 import { useChangePasswordMutation } from '../../generated/graphql';
-import InputField from '../../UI/InputField';
-import { toErrorMap } from '../../utils/toErrorMap';
 
 const ChangePassword: NextPage<{ token: string }> = ({ token }) => {
   const router = useRouter();
   const [, changePassword] = useChangePasswordMutation();
+  const [tokenError, setTokenError] = useState('');
 
   return (
     <Wrapper variant="small">
@@ -25,7 +28,13 @@ const ChangePassword: NextPage<{ token: string }> = ({ token }) => {
           });
 
           if (response.data?.changePassword.errors) {
-            setErrors(toErrorMap(response.data.changePassword.errors));
+            const errorMap = toErrorMap(response.data.changePassword.errors);
+
+            if ('token' in errorMap) {
+              setTokenError(errorMap.token);
+            }
+
+            setErrors(errorMap);
           } else if (response.data?.changePassword.user) {
             router.push('/');
           }
@@ -39,6 +48,12 @@ const ChangePassword: NextPage<{ token: string }> = ({ token }) => {
               label="New Password"
               type="password"
             />
+
+            {tokenError ? (
+              <Box mr={2} style={{ color: 'red' }}>
+                {tokenError}
+              </Box>
+            ) : null}
 
             <Button
               mt={4}
@@ -59,4 +74,6 @@ ChangePassword.getInitialProps = ({ query }) => ({
   token: query.token as string,
 });
 
-export default ChangePassword;
+export default withUrqlClient(createUrqlClient, { ssr: false })(
+  ChangePassword as any
+);

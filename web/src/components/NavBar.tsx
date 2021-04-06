@@ -8,6 +8,7 @@ const NavBar = () => {
   const [{ data, fetching }] = useMeQuery({
     pause: isServer(),
   });
+
   const [{ fetching: logoutFething }, logout] = useLogoutMutation();
 
   let body = null;
