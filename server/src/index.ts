@@ -15,6 +15,7 @@ import cors from 'cors';
 import { createConnection } from 'typeorm';
 import { Post } from './entities/Post';
 import { User } from './entities/User';
+import { join } from 'path';
 
 const main = async () => {
   // <-- TYPEORM -->
@@ -22,12 +23,15 @@ const main = async () => {
     type: 'postgres',
     database: 'lireddit2',
     username: 'postgres',
-    password: 'root',
+    password: 'postgres', // Sofia - root, Gabrovo - postgres
     logging: true,
     synchronize: true,
     entities: [Post, User], // 'src/entities/**/*.ts'
+    migrations: [join(__dirname, 'migrations/*{.ts,.js}')],
+    cli: {
+      migrationsDir: 'src/migrations',
+    },
   });
-  console.log(conn);
   // <-- TYPEORM -->
 
   const app = express();

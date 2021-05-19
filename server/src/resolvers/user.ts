@@ -142,6 +142,8 @@ export class UserResolver {
     let user;
 
     try {
+      // TODO
+      // @ts-ignore
       const result = await getConnection()
         .createQueryBuilder()
         .insert()
